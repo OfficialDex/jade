@@ -1,5 +1,5 @@
 github_repo = "OfficialDex/jade"
-huggingface_org = "TheOfficialDex"
+huggingface_org = "TheOfficialBlaze"
 colab_workdir = "/content/jade"
 log_dir = "logs"
 checkpoint_dir = "checkpoints"
