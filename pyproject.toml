@@ -1,0 +1,13 @@
+[project]
+name = "jade"
+version = "0.0.1"
+description = "efficient general-purpose llm research system"
+requires-python = ">=3.10"
+readme = "README.md"
+
+[tool.setuptools]
+packages = ["core", "utils", "storage", "inference", "dashboard", "research", "configs"]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"

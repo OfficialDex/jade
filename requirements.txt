@@ -1,0 +1,10 @@
+torch>=2.2
+transformers>=4.40
+datasets>=2.19
+tokenizers>=0.19
+huggingface_hub>=0.23
+accelerate>=0.30
+sentencepiece>=0.2
+numpy>=1.26
+psutil>=5.9
+pytest>=8.0
