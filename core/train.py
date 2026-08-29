@@ -1,6 +1,7 @@
 import math
 import os
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -32,14 +33,30 @@ def setup_distributed():
 
 
 def load_tokens(path):
-    return np.memmap(path, dtype=np.uint16, mode="r")
+    path = Path(path)
+    if path.is_dir():
+        shard_paths = sorted(path.glob("*.bin"))
+        if not shard_paths:
+            raise FileNotFoundError(f"no .bin token shards found in {path}")
+    else:
+        shard_paths = [path]
+    return [np.memmap(p, dtype=np.uint16, mode="r") for p in shard_paths]
 
 
-def get_batch(tokens, batch_size, context, device):
-    max_start = len(tokens) - context - 1
-    starts = torch.randint(max_start, (batch_size,))
-    x = torch.stack([torch.from_numpy(tokens[s:s + context].astype(np.int64)) for s in starts])
-    y = torch.stack([torch.from_numpy(tokens[s + 1:s + 1 + context].astype(np.int64)) for s in starts])
+def get_batch(shards, batch_size, context, device):
+    lengths = np.clip(np.array([len(s) - context - 1 for s in shards]), 0, None)
+    weights = lengths / lengths.sum()
+    shard_indices = np.random.choice(len(shards), size=batch_size, p=weights)
+
+    x_list, y_list = [], []
+    for shard_index in shard_indices:
+        tokens = shards[shard_index]
+        start = np.random.randint(0, len(tokens) - context - 1)
+        x_list.append(torch.from_numpy(tokens[start:start + context].astype(np.int64)))
+        y_list.append(torch.from_numpy(tokens[start + 1:start + 1 + context].astype(np.int64)))
+
+    x = torch.stack(x_list)
+    y = torch.stack(y_list)
     if device == "cuda":
         x = x.pin_memory().to(device, non_blocking=True)
         y = y.pin_memory().to(device, non_blocking=True)
@@ -55,7 +72,7 @@ def lr_scale(step, warmup, total):
     return 0.5 * (1 + math.cos(math.pi * min(progress, 1.0)))
 
 
-def train(model_config, train_config, token_path, checkpoint_dir, experiment, git_commit, repo_id=None, log_path=None):
+def train(model_config, train_config, token_dir, checkpoint_dir, experiment, git_commit, repo_id=None, log_path=None):
     logger = get()
     world_size, rank, local_rank = setup_distributed()
     device_type, precision = select_device_and_precision()
@@ -79,7 +96,7 @@ def train(model_config, train_config, token_path, checkpoint_dir, experiment, gi
     base_lrs = [group["lr"] for optimizer in optimizers for group in optimizer.param_groups]
     scaler = torch.amp.GradScaler("cuda", enabled=(precision == torch.float16))
 
-    tokens = load_tokens(token_path)
+    tokens = load_tokens(token_dir)
     step = 0
 
     restored = checkpoint.restore(checkpoint_dir, repo_id=repo_id)
@@ -138,7 +155,7 @@ def train(model_config, train_config, token_path, checkpoint_dir, experiment, gi
                 tokens=total_tokens,
                 config=model_config,
                 tokenizer_info={"name": "gpt2-bootstrap"},
-                dataset_info={"token_path": str(token_path)},
+                dataset_info={"token_dir": str(token_dir)},
                 experiment=experiment,
                 commit=git_commit,
             )
