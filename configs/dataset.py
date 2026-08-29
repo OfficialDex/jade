@@ -22,7 +22,7 @@ filters = {
 tiny = {
     "sources": sources,
     "filters": filters,
-    "sample_size": 2000,
+    "sample_size": 15000,
     "shard_size": 500,
     "seed": 42,
 }

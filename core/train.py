@@ -162,5 +162,23 @@ def train(model_config, train_config, token_dir, checkpoint_dir, experiment, git
             ok, path = checkpoint.commit(state, step, checkpoint_dir, repo_id=repo_id, log_path=log_path)
             logger.info(f"checkpoint step {step} verified={ok} path={path}")
 
+    if rank == 0:
+        final_state = checkpoint.build(
+            model_state=raw_model.state_dict(),
+            optimizer_state=[o.state_dict() for o in optimizers],
+            scheduler_state={"step": step},
+            rng_state=torch.get_rng_state(),
+            step=step,
+            epoch=1,
+            tokens=total_tokens,
+            config=model_config,
+            tokenizer_info={"name": "gpt2-bootstrap"},
+            dataset_info={"token_dir": str(token_dir)},
+            experiment=experiment,
+            commit=git_commit,
+        )
+        ok, path = checkpoint.commit(final_state, step, checkpoint_dir, repo_id=repo_id, log_path=log_path)
+        logger.info(f"training complete  step={step}/{train_config['steps']}  final checkpoint verified={ok} path={path}")
+
     return raw_model
 

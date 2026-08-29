@@ -1,14 +1,14 @@
 tiny = {
-    "batch_size": 8,
+    "batch_size": 32,
     "grad_accum": 1,
     "learning_rate": 0.0003,
     "muon_learning_rate": 0.02,
     "weight_decay": 0.1,
     "grad_clip": 1.0,
-    "steps": 200,
-    "warmup": 20,
-    "checkpoint_every": 50,
-    "eval_every": 50,
+    "steps": 1500,
+    "warmup": 100,
+    "checkpoint_every": 200,
+    "eval_every": 200,
 }
 
 small = {
