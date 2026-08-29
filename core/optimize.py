@@ -3,18 +3,26 @@ import torch
 
 def zeropower_via_newtonschulz5(gradient, steps=5, eps=1e-7):
     a, b, c = 3.4445, -4.7750, 2.0315
-    x = gradient.bfloat16() if gradient.is_cuda else gradient.float()
-    x = x / (x.norm() + eps)
-    transposed = x.size(0) > x.size(1)
+    x = gradient.bfloat16()
+    transposed = x.size(-2) > x.size(-1)
     if transposed:
-        x = x.T
+        x = x.mT
+    x = x / (x.norm(dim=(-2, -1), keepdim=True) + eps)
     for _ in range(steps):
-        a_matrix = x @ x.T
+        a_matrix = x @ x.mT
         b_matrix = b * a_matrix + c * a_matrix @ a_matrix
         x = a * x + b_matrix @ x
     if transposed:
-        x = x.T
-    return x.to(gradient.dtype)
+        x = x.mT
+    return x
+
+
+def muon_update(grad, momentum, beta=0.95, ns_steps=5, nesterov=True):
+    momentum.lerp_(grad, 1 - beta)
+    update = grad.lerp_(momentum, beta) if nesterov else momentum
+    update = zeropower_via_newtonschulz5(update, steps=ns_steps)
+    update = update * max(1.0, update.size(-2) / update.size(-1)) ** 0.5
+    return update.to(grad.dtype)
 
 
 class muon(torch.optim.Optimizer):
@@ -26,22 +34,16 @@ class muon(torch.optim.Optimizer):
     def step(self):
         for group in self.param_groups:
             lr = group["lr"]
-            momentum = group["momentum"]
             for p in group["params"]:
                 if p.grad is None:
                     continue
-                grad = p.grad
                 state = self.state[p]
                 if "momentum_buffer" not in state:
-                    state["momentum_buffer"] = torch.zeros_like(grad)
-                buf = state["momentum_buffer"]
-                buf.mul_(momentum).add_(grad)
-                update = grad.add(buf, alpha=momentum) if group["nesterov"] else buf
-                update = zeropower_via_newtonschulz5(update, steps=group["ns_steps"])
-                scale = max(1.0, p.size(0) / p.size(1)) ** 0.5
+                    state["momentum_buffer"] = torch.zeros_like(p)
+                update = muon_update(p.grad, state["momentum_buffer"], beta=group["momentum"], ns_steps=group["ns_steps"], nesterov=group["nesterov"])
                 if group["weight_decay"] != 0:
                     p.mul_(1 - lr * group["weight_decay"])
-                p.add_(update, alpha=-lr * scale)
+                p.add_(update, alpha=-lr)
 
 
 def build_optimizer(model, train_config):

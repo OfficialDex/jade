@@ -14,7 +14,8 @@ from utils.logging import get
 def select_device_and_precision():
     if not torch.cuda.is_available():
         return "cpu", torch.float32
-    precision = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+    major, _ = torch.cuda.get_device_capability()
+    precision = torch.bfloat16 if major >= 8 else torch.float16
     return "cuda", precision
 
 
@@ -76,7 +77,7 @@ def train(model_config, train_config, token_path, checkpoint_dir, experiment, gi
 
     optimizers = optimize.build_optimizer(raw_model, train_config)
     base_lrs = [group["lr"] for optimizer in optimizers for group in optimizer.param_groups]
-    scaler = torch.cuda.amp.GradScaler(enabled=(precision == torch.float16))
+    scaler = torch.amp.GradScaler("cuda", enabled=(precision == torch.float16))
 
     tokens = load_tokens(token_path)
     step = 0
