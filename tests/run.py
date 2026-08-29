@@ -3,13 +3,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from tests import config, logging, checkpoint
+from tests import config, logging, checkpoint, data
 
 
 def main():
     config.run()
     logging.run()
     checkpoint.run()
+    data.run()
     print("all tests passed")
 
 
